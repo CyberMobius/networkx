@@ -5,8 +5,9 @@ Min-heaps.
 from heapq import heappop, heappush
 from itertools import count
 import networkx as nx
+import math
 
-__all__ = ["MinHeap", "PairingHeap", "BinaryHeap"]
+__all__ = ["MinHeap", "PairingHeap", "BinaryHeap", "FibonacciHeap"]
 
 
 class MinHeap:
@@ -366,3 +367,281 @@ class BinaryHeap(MinHeap):
             dict[key] = value
             heappush(self._heap, (value, next(self._count), key))
             return True
+
+
+class FibonacciHeap(MinHeap):
+    """A Fibonacci heap.
+
+    [1] Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, and 
+    Clifford Stein. 2009. Introduction to Algorithms, Third Edition (3rd. ed.). 
+    The MIT Press., pp.503-526.
+    """
+
+    class _FHeapItem(MinHeap._Item):
+        """Each member of the fibonacci heap contains a reference to its left
+        sibling and right sibling as well as to its parent and one of its
+        children. The siblings of a fibonacci heap form a circularly doubly 
+        linked list.
+        """
+
+        __slots__ = ("left", "right", "child", "parent", "count_children", "mark")
+
+        def __init__(self, key, value):
+            """Create 
+
+            Parameters
+            ----------
+            key : [type]
+                [description]
+            item : [type]
+                [description]
+            """
+            super().__init__(key, value)
+            self.left: _FHeapItem = None
+            self.right: _FHeapItem = None
+            self.child: _FHeapItem = None
+            self.parent: _FHeapItem = None
+            self.count_children: int = 0
+            self.mark: bool = False
+
+        def _set_siblings(self, left, right):
+            """A shorthand way to set the siblings of an item. This does NOT 
+            preserve the doubly linked list
+
+            Parameters
+            ----------
+            left : _FHeapItem
+                The item left of this one in the FHeap
+            right : _FHeapItem
+                The item left of this one in the FHeap
+            """
+            self.left = left
+            self.right = right
+
+        def add_right(self, right_node):
+            """Adds an item to the right of this node
+
+            Parameters
+            ----------
+            right_node : _FHeapItem
+                The node to go right of this one
+            """
+            # If there is no right node i.e. the linked list has only one
+            # element
+            if self.right is None:
+                self.set_siblings(right_node, right_node)
+                right_node.set_siblings(self, self)
+
+            # Create space for new right node
+            else:
+                right_node._set_siblings(self, self.right)
+                self.right.left = right_node
+                self.right = right_node
+
+        def add_left(self, left_node):
+            """Adds an item to the left of this node
+
+            Parameters
+            ----------
+            left_node : _FHeapItem
+                The node to go left of this one
+            """
+            # If there are no siblings, then add it to the left, and since this
+            # is a circular doubly linked list
+            if self.left is None:
+                self.set_siblings(left_node, left_node)
+                left_node.set_siblings(self, self)
+            else:
+                self.left.add_right(left_node)
+
+        def add_child(self, new_child):
+            """Add new Node as child to this node
+
+            Parameters
+            ----------
+            new_child : _FHeapItem
+                Node that will become the child of this node
+            """
+            if self.child is None:
+                self.child = new_child
+            else:
+                self.child.add_right(new_child)
+
+        def sibling_iterator(self):
+            """Iterator over all siblings of the self node
+
+            Yields
+            -------
+            _FHeapItem
+                An item that is a sibling of this node
+            """
+            yield self
+
+            current_node = self.right
+            while current_node is not None and current_node != self:
+                yield current_node
+                current_node = self.right
+
+    def __init__(self):
+        """Initialize the fibonacci heap with a reference to the min item
+        """
+        self.min: self._FHeapItem
+        self.min = None
+
+        self.count = 0
+
+    @_inherit_doc(MinHeap)
+    def min(self):
+        if self.min is None:
+            raise nx.NetworkXError("heap is empty.")
+
+        return (self.min.key, self.min.item)
+
+    def _add_children_to_root_list(self):
+        """Helper function to add children to the root list
+        """
+        if self.min.child is None:
+            return
+
+        # Keep track of a child
+        child = self.min.child
+
+        # If this child is the only element of the list simply add it as a
+        # sibling to the min item. Mark it as not having a parent
+        if child.right is None:
+            child.parent = None
+            self.min.child = None
+            self.min.add_right(child)
+
+        # For element in the child linked list, add it as a sibling to the min
+        # item
+        else:
+            # Start from the first child
+            sibling = child
+            while sibling.parent is not None:
+                sibling.parent = None
+
+                # Keep a reference to the right sibling in case self.add_right
+                # changes who the right sibling is
+                right_sibling = sibling.right
+                self.min.add_right(sibling)
+                sibling = right_sibling
+
+    @_inherit_doc(MinHeap)
+    def pop(self):
+
+        # The fibonacci heap only mantains a reference to its minimum item. This
+        # minimum item sits in the
+        if self.min is None:
+            raise nx.NetworkXError("heap is empty.")
+
+        # Add all the children as siblings to the min, effectively adding them
+        # to the root_list
+        self._add_children_to_root_list()
+
+        # Keep track of the min item
+        min_item = self.min
+
+        # If there is no sibling, this is the last element and mark min as None
+        if self.min.right is None:
+            self.min = None
+
+        # Otherwise, make the right sibling as a the new temporary min. Based on
+        # the behavior of self._add_children_to_root_list this will be a child
+        # of the original min item. Then consolidate the heap and find the new
+        # min
+        else:
+            self.min = self.min.right
+            self._consolidate()
+
+        # Decrease count by one and return
+        self.count -= 1
+        return (min_item.key, min_item.value)
+
+    def _consolidate(self):
+        """Cormen at al.: 'It is also where the delayed work of consolidating
+        trees in the root_list finally occurs.' This function is analogous to 
+        heapify for other heaps. Look through the root list for two nodes with 
+        same degree and make one the child of the other until all nodes in the 
+        root list have unique degrees
+
+        [1] Cormen et. al. creates an array A where A[i] refers to a node in the
+        root list of degree i. Here it's called `degree_list`. 
+        When two nodes of equal degree are found, one is made a child of the 
+        other. 
+        In my implementation specifically, at the time this function is
+        called, self.min might not point to the minimum item, but it is
+        guaranteed to be in the root list. We use it to iterate through the root
+        list.
+        """
+
+        # Since node degrees are guaranteed to be no bigger than
+        # floor(log2(H.n)), we can create an array of appropriate size ahead of
+        # time
+        degree_list = [None for i in int(range(math.log2(self.count)))]
+
+        root_node: self._FHeapItem
+        for root_node in self.min.sibling_iterator():
+            x = root_node
+            while degree_list[x.count_children] is not None:
+                y = degree_list[x.count_children]
+
+                # [1] says exchange these two nodes. I'll swap their keys and
+                # values instead of having to worry about re pointing all their
+                # pointers. Behavior should stay the same
+                if x.value > y.value:
+                    x.value, y.value = y.value, x.value
+                    x.key, y.key = y.key, x.key
+
+                self._FibHeapLink(y, x)
+                degree_list[x.count_children] = None
+                x.count_children += 1
+        self.min = None
+
+        for i in range(len(degree_list)):
+            if degree_list[i] is not None:
+                if self.min is None:
+                    self.min = degree_list[i]
+                else:
+                    self.min.add_right(degree_list[i])
+                    if self.min.value > degree_list[i].value:
+                        self.min = degree_list[i]
+
+    def _FibHeapLink(self, y: _FHeapItem, x: _FHeapItem):
+        """Remove y from the root list and make it a child of x
+
+        Parameters
+        ----------
+        y : self._FHeapItem
+            The larger of the two elements
+        x : self._FHeapItem
+            The smaller of the two elements, it stays in the root list and y
+            becomes its child
+        """
+        y.mark = False
+        y.parent = x
+        y.left.right = y.right
+        y.right.left = y.left
+        x.add_child(y)
+
+    @_inherit_doc(MinHeap)
+    def insert(self, key, value, allow_increase=False):
+
+        if allow_increase:
+            raise NotImplementedError
+
+        # Create a FHeap item for our key value
+        item = self._FHeapItem(key, value)
+
+        # If the heap is empty, this is the new item of the heap
+        if self.min is None:
+            self.min = item
+
+        # If the heap has a min item, add the new item to the right of it and
+        # compare against the minimum
+        else:
+            self.min.add_right(item)
+            if value < self.min.value:
+                self.min = item
+
+        self.count += 1
