@@ -101,3 +101,142 @@ class UnionFind:
         for r in roots:
             self.weights[root] += self.weights[r]
             self.parents[r] = root
+
+
+class CompressedTree(UnionFind):
+    """Compressed Tree datatype for storing disjoint sets. It's similar to the 
+    UnionFind datatype above with one exception. Each value has an associated 
+    real number and the value of some node is stored as it's difference from the
+    parent. 
+    So if we have two nodes of value 5 and 8, then we make the 5 node the child
+    of the 8 node, we'll store the 5 as -3, (5 - 8 = -3). This way, we can
+    recover the value by adding the value we have stored to all of it's parents.
+    We store it this way so that we can implement change_value(self, delta, A).
+    This way when we add delta to the value of the set A, all it's children get
+    delta added to them as well for free. This is a useful property for some
+    graph algorithms.  
+
+    [1]  Michael L. Fredman and Robert Endre Tarjan. 1987. Fibonacci heaps and 
+    their uses in improved network optimization algorithms. J. ACM 34, 3 
+    (July 1987), 596–615. DOI:https://doi.org/10.1145/28869.28874
+
+    [2] Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, and Clifford 
+    Stein. 2009. Introduction to Algorithms, Third Edition (3rd. ed.). The MIT 
+    Press.
+
+    [3] The code above for UnionFind
+    """
+
+    def __init__(self, attribute: str, elements=None) -> None:
+        """Create a new empty union-find structure
+
+        Parameters
+        ----------
+        attr : str
+            The attribute name of the real value to associate with each object
+        elements : iter, optional
+            If *elements* is an iterable, this structure will be initialized
+            with the discrete partition on the given set of elements., 
+            by default None
+        """
+        super().__init__(elements)
+        self.attribute = attribute
+
+    def change_value(self, delta, A):
+        """Add delta to the value for A
+
+        Parameters
+        ----------
+        delta : number
+            The number we want to add to the attribute of A we specified in the 
+            __init__
+        A : Any
+            An object from the set
+        """
+        setattr(getattr(A, self.attribute) + delta)
+
+    def union(self, *objects):
+        """Find the sets containing the objects and merge them all.
+
+        Parameters
+        ----------
+        objects : iterable
+            A list of objects that have the self.attribute attribute
+
+        Raises
+        ------
+        AttributeError
+            If any of the objects don't have the attribute we provided in the
+            __init__, then raise this error.
+        """
+
+        for o in objects:
+            hasattr(o, self.attribute)
+
+        roots = iter(sorted({self[x] for x in objects}, key=lambda r: self.weights[r]))
+        try:
+            root = next(roots)
+        except StopIteration:
+            return
+
+        for r in roots:
+            self.weights[root] += self.weights[r]
+            self.parents[r] = root
+            setattr(r, getattr(r, self.attribute) - getattr(root, self.attribute))
+
+    def __getitem__(self, object):
+        """Find and return the name of the set containing the object."""
+
+        # check for previously unknown object
+        if object not in self.parents:
+            self.parents[object] = object
+            self.weights[object] = 1
+            return object
+
+        # find path of objects leading to the root
+        path = [object]
+        root = self.parents[object]
+
+        value_stack = [0]
+
+        while root != path[-1]:
+            path.append(root)
+            root = self.parents[root]
+            value_stack.append(getattr(root, self.attribute) + value_stack[-1])
+
+        # compress the path and return
+        for ancestor in path:
+            self.parents[ancestor] = root
+            setattr(
+                ancestor,
+                self.attribute,
+                getattr(ancestor, self.attribute) + value_stack.pop(),
+            )
+        return root
+
+    def get_value(self, object):
+        if object not in self.parents:
+            self.parents[object] = object
+            self.weights[object] = 1
+            return getattr(object, self.attribute)
+
+        # Find the name of the set this object belongs to
+        parent_object = self[object]
+
+        if parent_object is object:
+            return getattr(object, self.attribute)
+        return getattr(parent_object, self.attribute) + getattr(object, self.attribute)
+
+    def union(self, *objects):
+        """Find the sets containing the objects and merge them all."""
+        # Find the heaviest root according to its weight.
+        roots = iter(sorted({self[x] for x in objects}, key=lambda r: self.weights[r]))
+        try:
+            root = next(roots)
+        except StopIteration:
+            return
+
+        for r in roots:
+            self.weights[root] += self.weights[r]
+            self.parents[r] = root
+            setattr(r, getattr(r, self.attribute) - getattr(root, self.attribute))

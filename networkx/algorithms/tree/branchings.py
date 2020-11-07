@@ -32,7 +32,7 @@ import string
 from operator import itemgetter
 
 import networkx as nx
-from networkx.utils import py_random_state
+from networkx.utils import py_random_state, FibonacciHeap, CompressedTree
 
 from .recognition import is_arborescence, is_branching
 
@@ -45,6 +45,7 @@ __all__ = [
     "maximum_spanning_arborescence",
     "minimum_spanning_arborescence",
     "Edmonds",
+    "GGST",
 ]
 
 KINDS = {"max", "min"}
@@ -637,6 +638,110 @@ class Edmonds:
 
         return H
 
+
+class GGST:
+    """
+    Gabow, Galil, Spence and Tarjan's algorithm for finding optimal branchings 
+    and spanning arborescences. 
+
+    [1] Gabow, H.N., Galil, Z., Spencer, T. et al. Efficient algorithms for 
+    finding minimum spanning trees in undirected and directed graphs. 
+    Combinatorica 6, 109–122 (1986). https://doi.org/10.1007/BF02579168
+    """
+
+    def __init__(self, G: nx.DiGraph):
+        self.G = G
+
+    def find_optimum(
+        self,
+        attr="weight",
+        default=1,
+        kind="max",
+        style="branching",
+        preserve_attrs=False,
+        seed=None,
+    ):
+        """
+        Returns a branching from G.
+
+        Parameters
+        ----------
+        attr : str
+            The edge attribute used to in determining optimality.
+        default : float
+            The value of the edge attribute used if an edge does not have
+            the attribute `attr`.
+        kind : {'min', 'max'}
+            The type of optimum to search for, either 'min' or 'max'.
+        style : {'branching', 'arborescence'}
+            If 'branching', then an optimal branching is found. If `style` is
+            'arborescence', then a branching is found, such that if the
+            branching is also an arborescence, then the branching is an
+            optimal spanning arborescences. A given graph G need not have
+            an optimal spanning arborescence.
+        preserve_attrs : bool
+            If True, preserve the other edge attributes of the original
+            graph (that are not the one passed to `attr`)
+        seed : integer, random_state, or None (default)
+            Indicator of random number generation state.
+            See :ref:`Randomness<randomness>`.
+
+        Returns
+        -------
+        H : (multi)digraph
+            The branching.
+
+        """
+        # The Gabow, Galil, Spence, Tarjan algorithm is mostly an optimization
+        # of Edmond's algorithm above.
+        #
+        # Firstly, we assume that our graph is complete, if it isn't we'll simply
+        # add edges of infinite weight between each vertex. As an implementation
+        # detail, we won't actually create all these edges upfront, but if we
+        # ever get "stuck," we'll create an infinite weight edge to some
+        # arbitrary vertex.
+        #
+        # Secondly, we pick an arbitrary vertex to start from, call it s.
+        # Pick the minimum weight edge from the rest of the graph to s. This
+        # edge, (v,s), will be added to the set of edges we're considering for
+        # our minimum arborescence. Now, add the minimum weight edge from the
+        # rest of the graph connecting the parent of s, this v vertex.
+        # Similarly, add this edge to the set of edges we're considering for our
+        # spanning arborescence. We keep adding minimum weight edges to the
+        # root of our growing arborescence. If this growing arborescence spans
+        # all vertices, we can return it.
+        # However, if we create a loop, we'll replace all the edges of the self
+        # loop with
+        # TODO: Finish this explanation
+
+        G = self.G
+        selected_edges = CompressedTree()
+
+        growth_path = {G.nodes[0]: 0}
+        growth_path_list = [G.nodes[0]]
+
+        head = G.nodes[0]
+
+        k = 1
+        while True:
+            try:
+                new_head = min(p[attr] for p in G.predecessors(head) if p is not head)
+
+            except (StopIteration, ValueError):
+                # Like I described above, if we can't find any predecessors,
+                # we'll create an edge with infinite weight to some node.
+                # To hopefully improve on performance, we'll pick one that
+                # doesn't immediately create a loop. For the time being this is
+                # an implicit edge.
+                new_head = next(x for x in G.nodes if x not in growth_path)
+
+
+            if new_head in growth_path:
+                # Compress loop into one node
+                new_head
+                pass
+
+            growth_path[new_head] = k
 
 def maximum_branching(G, attr="weight", default=1, preserve_attrs=False):
     ed = Edmonds(G)
