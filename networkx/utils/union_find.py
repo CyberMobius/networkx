@@ -127,20 +127,18 @@ class CompressedTree(UnionFind):
     [3] The code above for UnionFind
     """
 
-    def __init__(self, attribute: str, elements=None) -> None:
+    def __init__(self, elements=None) -> None:
         """Create a new empty union-find structure
 
         Parameters
         ----------
-        attr : str
-            The attribute name of the real value to associate with each object
         elements : iter, optional
             If *elements* is an iterable, this structure will be initialized
             with the discrete partition on the given set of elements., 
             by default None
         """
         super().__init__(elements)
-        self.attribute = attribute
+        self.value_dict = {element:0 for element in elements}
 
     def change_value(self, delta, A):
         """Add delta to the value for A
@@ -153,7 +151,7 @@ class CompressedTree(UnionFind):
         A : Any
             An object from the set
         """
-        setattr(getattr(A, self.attribute) + delta)
+        self.value_dict[A] += delta
 
     def union(self, *objects):
         """Find the sets containing the objects and merge them all.
@@ -169,10 +167,6 @@ class CompressedTree(UnionFind):
             If any of the objects don't have the attribute we provided in the
             __init__, then raise this error.
         """
-
-        for o in objects:
-            hasattr(o, self.attribute)
-
         roots = iter(sorted({self[x] for x in objects}, key=lambda r: self.weights[r]))
         try:
             root = next(roots)
@@ -182,7 +176,7 @@ class CompressedTree(UnionFind):
         for r in roots:
             self.weights[root] += self.weights[r]
             self.parents[r] = root
-            setattr(r, getattr(r, self.attribute) - getattr(root, self.attribute))
+            self.value_dict[r] -= self.value_dict[root]
 
     def __getitem__(self, object):
         """Find and return the name of the set containing the object."""
@@ -191,6 +185,7 @@ class CompressedTree(UnionFind):
         if object not in self.parents:
             self.parents[object] = object
             self.weights[object] = 1
+            self.value_dict[object] = 0
             return object
 
         # find path of objects leading to the root
@@ -202,30 +197,28 @@ class CompressedTree(UnionFind):
         while root != path[-1]:
             path.append(root)
             root = self.parents[root]
-            value_stack.append(getattr(root, self.attribute) + value_stack[-1])
+            value_stack.append(self.value_dict[root] + value_stack[-1])
 
         # compress the path and return
         for ancestor in path:
             self.parents[ancestor] = root
-            setattr(
-                ancestor,
-                self.attribute,
-                getattr(ancestor, self.attribute) + value_stack.pop(),
-            )
+            self.value_dict[ancestor] = self.value_dict[ancestor] + value_stack.pop()
         return root
 
     def get_value(self, object):
         if object not in self.parents:
             self.parents[object] = object
             self.weights[object] = 1
-            return getattr(object, self.attribute)
+            self.value_dict[object] = 0
+            return 0
 
         # Find the name of the set this object belongs to
         parent_object = self[object]
 
         if parent_object is object:
-            return getattr(object, self.attribute)
-        return getattr(parent_object, self.attribute) + getattr(object, self.attribute)
+            return self.value_dict[object]
+        
+        return self.value_dict[parent_object] + self.value_dict[object]
 
     def union(self, *objects):
         """Find the sets containing the objects and merge them all."""
@@ -239,4 +232,4 @@ class CompressedTree(UnionFind):
         for r in roots:
             self.weights[root] += self.weights[r]
             self.parents[r] = root
-            setattr(r, getattr(r, self.attribute) - getattr(root, self.attribute))
+            self.value_dict[r] -= self.value_dict[root]
