@@ -649,14 +649,27 @@ class GGST:
     Combinatorica 6, 109–122 (1986). https://doi.org/10.1007/BF02579168
     """
 
-    def __init__(self, G: nx.DiGraph):
+    def __init__(
+        self, G: nx.DiGraph, 
+        attr="weight",
+        default=1,
+        kind="max"
+        ):
         self.G = G
+        self.default = default
+        self.attr = attr
+        self.kind = kind
+
+        self.edge_mapping = {}
+
+
+    def _get_edge(self, node_from, node_to):
+        pass
+        
+        
 
     def find_optimum(
         self,
-        attr="weight",
-        default=1,
-        kind="max",
         style="branching",
         preserve_attrs=False,
         seed=None,
@@ -715,17 +728,24 @@ class GGST:
         # TODO: Finish this explanation
 
         G = self.G
-        selected_edges = CompressedTree()
+        attr = self.attr
+        selected_nodes = CompressedTree()
+        compressed_edges = {}
 
         growth_path = {G.nodes[0]: 0}
         growth_path_list = [G.nodes[0]]
+        growth_path_index = 1
 
-        head = G.nodes[0]
+        head = selected_nodes[G.nodes[0]]
 
-        k = 1
         while True:
             try:
-                new_head = min(p[attr] for p in G.predecessors(head) if p is not head)
+                new_head = min(
+                    p[attr] 
+                    for p in G.predecessors(head) 
+                    if p is not head, 
+                    key=lambda x: G[x][head][attr]
+                )
 
             except (StopIteration, ValueError):
                 # Like I described above, if we can't find any predecessors,
@@ -735,13 +755,40 @@ class GGST:
                 # an implicit edge.
                 new_head = next(x for x in G.nodes if x not in growth_path)
 
+            new_head = selected_nodes[new_head]
 
             if new_head in growth_path:
                 # Compress loop into one node
-                new_head
-                pass
 
-            growth_path[new_head] = k
+                loop_start = growth_path[new_head]  
+                # TODO: This copies items from the list into a new list, it might be
+                # worth it into looking for some way to avoid this kind of copying
+                loop_nodes = growth_path_list[loop_start:]
+
+                # The change in value needs to happen simultaneously for all nodes, so
+                # store the changes in value we want to induce before applying
+                value_changes = []
+                for i in range(-1, len(loop_nodes)-1):
+                    this_node, next_node = loop_nodes[i], loop_nodes[i+1]
+                    edge_cost = G[this_node][next_node][attr]
+
+                    delta = -1*edge_cost - selected_nodes.get_value(next_node)
+                    
+                    value_changes.append(delta)
+                
+                # Apply the delta for every node we're compressing
+                for i in range(len(value_changes)):
+                    selected_nodes.change_value(value_changes[i], loop_nodes[i])
+
+
+                selected_nodes.union(*loop_nodes)
+
+            else:
+                growth_path_list.append(new_head)
+                growth_path_index += 1
+                growth_path[new_head] = growth_path_index
+                selected_nodes.union(new_head)
+
 
 def maximum_branching(G, attr="weight", default=1, preserve_attrs=False):
     ed = Edmonds(G)
