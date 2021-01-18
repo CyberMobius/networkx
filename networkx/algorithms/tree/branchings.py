@@ -30,9 +30,11 @@ This implementation is based on:
 
 import string
 from operator import itemgetter
+from typing import Dict, List, Set
 
 import networkx as nx
 from networkx.utils import py_random_state, FibonacciHeap, CompressedTree
+from itertools import islice, chain
 
 from .recognition import is_arborescence, is_branching
 
@@ -644,10 +646,41 @@ class GGST:
     Gabow, Galil, Spence and Tarjan's algorithm for finding optimal branchings 
     and spanning arborescences. 
 
+    A brief description of the algorithm: Start by creating an empty 'growth path'. To
+    start, add an arbitrary node into it. This node is now the 'head' of our growth 
+    path. Continue by adding the minimum weight parent of the head node to the growth
+    path, making it the new head. Continue adding minimum weight parents of the head
+    node to the growth path until either all nodes are exhausted or you create a cycle
+    with your growth path. 
+    If all nodes are exhausted, this is the spanning arborescence, return it. Otherwise
+    compress all the nodes that form the cycle into one node, and contine with our
+    process of adding to the growth path until we've exhausted all the nodes.
+    Then for each compressed node decompress them and choose some edge from the cycle to 
+    remove. Once all cycles are removed we should be left with the optimal spanning 
+    arborescence.
+    
     [1] Gabow, H.N., Galil, Z., Spencer, T. et al. Efficient algorithms for 
     finding minimum spanning trees in undirected and directed graphs. 
     Combinatorica 6, 109–122 (1986). https://doi.org/10.1007/BF02579168
     """
+
+    class _CandidateEdges:
+        """From the paper[1]: "We need some lists and sets to keep track of candidate 
+        edges and to allow easy deletion of multiple edges. For each vertex v not on the 
+        growth not on the growth path we maintain a an exit list of the current edges 
+        (v, v_i), sorted in increasing order on i. (Recall that the growth path contains
+        vertices v_0,v_1,...,v_l.) For each vertex v_j on the growth path we maintain a 
+        similar exit list, of those edges (v_j, v_i) with j < i also sorted in 
+        increasing order on i. Among those edges in the exit list, the first (of lowest
+        index i) is active; the others are passive. For each vertex v_i, we maintain a 
+        passive set containing all passive edges entering v_i"
+        """
+        exit_list: List
+        passive_set: Set
+
+        def __init__(self, exit_list = None, passive_set = None):
+            self.exit_list = exit_list if exit_list is not None else []
+            self.passive_set = passive_set if passive_set is not None else {}
 
     def __init__(
         self, G: nx.DiGraph, 
@@ -660,13 +693,15 @@ class GGST:
         self.attr = attr
         self.kind = kind
 
-        self.edge_mapping = {}
+        self._edge_mapping = {}
 
+    def _get_edge(self, node_from, node_to) -> "Edge":
+        if (node_from, node_to) in self._edge_mapping:
+            return self._edge_mapping[(node_from, node_to)]
+        return self.G[node_from][node_to]
 
-    def _get_edge(self, node_from, node_to):
+    def _add_edge(node_from, node_to):
         pass
-        
-        
 
     def find_optimum(
         self,
@@ -730,18 +765,25 @@ class GGST:
         G = self.G
         attr = self.attr
         selected_nodes = CompressedTree()
-        compressed_edges = {}
 
+        # Initialize our growth path
         growth_path = {G.nodes[0]: 0}
         growth_path_list = [G.nodes[0]]
         growth_path_index = 1
 
         head = selected_nodes[G.nodes[0]]
 
+        # Initialize our exit lists and passive sets
+        canditdate_edges: Dict[object, self._CandidateEdges]
+        canditdate_edges = {
+            v: self._CandidateEdges(exit_list=[head])
+            for v in G.predecessors(head)
+        }
+
         while True:
             try:
                 new_head = min(
-                    p[attr] 
+                    p
                     for p in G.predecessors(head) 
                     if p is not head, 
                     key=lambda x: G[x][head][attr]
@@ -758,21 +800,24 @@ class GGST:
             new_head = selected_nodes[new_head]
 
             if new_head in growth_path:
-                # Compress loop into one node
+                # Compress loop into one node. This is case 2 from the paper [1]
 
-                loop_start = growth_path[new_head]  
-                # TODO: This copies items from the list into a new list, it might be
-                # worth it into looking for some way to avoid this kind of copying
+
+
+                # TODO see if there's a way to avoid creating this intermediate list
+                # to free up some space for potentially large loops
+                loop_start = growth_path[new_head]
                 loop_nodes = growth_path_list[loop_start:]
 
                 # The change in value needs to happen simultaneously for all nodes, so
-                # store the changes in value we want to induce before applying
+                # store the change in value we want to induce before applying
                 value_changes = []
                 for i in range(-1, len(loop_nodes)-1):
                     this_node, next_node = loop_nodes[i], loop_nodes[i+1]
-                    edge_cost = G[this_node][next_node][attr]
+                    edge_cost = self._get_edge(this_node, next_node)[attr]
 
-                    delta = -1*edge_cost - selected_nodes.get_value(next_node)
+
+                    delta = -1 * edge_cost - selected_nodes.get_value(next_node)
                     
                     value_changes.append(delta)
                 
@@ -780,14 +825,16 @@ class GGST:
                 for i in range(len(value_changes)):
                     selected_nodes.change_value(value_changes[i], loop_nodes[i])
 
-
                 selected_nodes.union(*loop_nodes)
 
             else:
+                # This corresponds to case 1 from the paper[1]
                 growth_path_list.append(new_head)
                 growth_path_index += 1
                 growth_path[new_head] = growth_path_index
                 selected_nodes.union(new_head)
+
+            head = new_head
 
 
 def maximum_branching(G, attr="weight", default=1, preserve_attrs=False):
