@@ -775,10 +775,10 @@ class GGST:
 
         # Initialize our exit lists and passive sets
         canditdate_edges: Dict[object, self._CandidateEdges]
-        canditdate_edges = {
-            v: self._CandidateEdges(exit_list=[head])
-            for v in G.predecessors(head)
-        }
+        canditdate_edges = {node: self._CandidateEdges() for node in G.nodes}
+        # For all edges of the form (v, head) add the edge to the exist list of 
+        for v in G.predecessors(head):
+            canditdate_edges[v].exit_list.append(head)
 
         while True:
             try:
@@ -801,8 +801,6 @@ class GGST:
 
             if new_head in growth_path:
                 # Compress loop into one node. This is case 2 from the paper [1]
-
-
 
                 # TODO see if there's a way to avoid creating this intermediate list
                 # to free up some space for potentially large loops
@@ -833,6 +831,21 @@ class GGST:
                 growth_path_index += 1
                 growth_path[new_head] = growth_path_index
                 selected_nodes.union(new_head)
+
+                for v in canditdate_edges[new_head].exit_list:
+                    # new_head corresponds to the u vertex from the paper
+                    canditdate_edges[v].passive_set.remove((new_head,v))
+                
+                for x in G.predecessors(new_head):
+                    try:
+                        canditdate_edges[new_head].passive_set.add(
+                            canditdate_edges[x].exit_list[-1]
+                        )
+                    except IndexError:
+                        pass
+
+                    canditdate_edges[x].exit_list.append(new_head)
+                    
 
             head = new_head
 
