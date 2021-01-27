@@ -65,9 +65,7 @@ class UnionFind:
         return root
 
     def __iter__(self):
-        """Iterate through all items ever found or unioned by this structure.
-
-        """
+        """Iterate through all items ever found or unioned by this structure."""
         return iter(self.parents)
 
     def to_sets(self):
@@ -104,24 +102,24 @@ class UnionFind:
 
 
 class CompressedTree(UnionFind):
-    """Compressed Tree datatype for storing disjoint sets. It's similar to the 
-    UnionFind datatype above with one exception. Each value has an associated 
+    """Compressed Tree datatype for storing disjoint sets. It's similar to the
+    UnionFind datatype above with one exception. Each value has an associated
     real number and the value of some node is stored as it's difference from the
-    parent. 
+    parent.
     So if we have two nodes of value 5 and 8, then we make the 5 node the child
     of the 8 node, we'll store the 5 as -3, (5 - 8 = -3). This way, we can
     recover the value by adding the value we have stored to all of it's parents.
     We store it this way so that we can implement change_value(self, delta, A).
     This way when we add delta to the value of the set A, all it's children get
     delta added to them as well for free. This is a useful property for some
-    graph algorithms.  
+    graph algorithms.
 
-    [1]  Michael L. Fredman and Robert Endre Tarjan. 1987. Fibonacci heaps and 
-    their uses in improved network optimization algorithms. J. ACM 34, 3 
+    [1]  Michael L. Fredman and Robert Endre Tarjan. 1987. Fibonacci heaps and
+    their uses in improved network optimization algorithms. J. ACM 34, 3
     (July 1987), 596–615. DOI:https://doi.org/10.1145/28869.28874
 
-    [2] Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, and Clifford 
-    Stein. 2009. Introduction to Algorithms, Third Edition (3rd. ed.). The MIT 
+    [2] Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, and Clifford
+    Stein. 2009. Introduction to Algorithms, Third Edition (3rd. ed.). The MIT
     Press.
 
     [3] The code above for UnionFind
@@ -134,11 +132,11 @@ class CompressedTree(UnionFind):
         ----------
         elements : iter, optional
             If *elements* is an iterable, this structure will be initialized
-            with the discrete partition on the given set of elements., 
+            with the discrete partition on the given set of elements.,
             by default None
         """
         super().__init__(elements)
-        self.value_dict = {element:0 for element in elements}
+        self.value_dict = {element: 0 for element in elements}
 
     def change_value(self, delta, A):
         """Add delta to the value for A
@@ -146,7 +144,7 @@ class CompressedTree(UnionFind):
         Parameters
         ----------
         delta : number
-            The number we want to add to the attribute of A we specified in the 
+            The number we want to add to the attribute of A we specified in the
             __init__
         A : Any
             An object from the set
@@ -217,7 +215,7 @@ class CompressedTree(UnionFind):
 
         if parent_object is object:
             return self.value_dict[object]
-        
+
         return self.value_dict[parent_object] + self.value_dict[object]
 
     def union(self, *objects):
@@ -233,3 +231,5 @@ class CompressedTree(UnionFind):
             self.weights[root] += self.weights[r]
             self.parents[r] = root
             self.value_dict[r] -= self.value_dict[root]
+
+        return root

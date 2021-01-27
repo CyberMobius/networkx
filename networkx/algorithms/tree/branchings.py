@@ -682,6 +682,7 @@ class GGST:
             self.exit_list = exit_list if exit_list is not None else []
             self.passive_set = passive_set if passive_set is not None else {}
 
+
     def __init__(
         self, G: nx.DiGraph, 
         attr="weight",
@@ -814,7 +815,6 @@ class GGST:
                     this_node, next_node = loop_nodes[i], loop_nodes[i+1]
                     edge_cost = self._get_edge(this_node, next_node)[attr]
 
-
                     delta = -1 * edge_cost - selected_nodes.get_value(next_node)
                     
                     value_changes.append(delta)
@@ -823,7 +823,26 @@ class GGST:
                 for i in range(len(value_changes)):
                     selected_nodes.change_value(value_changes[i], loop_nodes[i])
 
-                selected_nodes.union(*loop_nodes)
+                for v_i in loop_nodes:
+                    passive_edges  = canditdate_edges[v_i].passive_set
+                    for j in range(len(passive_edges)-1):
+                        x = passive_edges[j]
+                        max_edge = max(
+                            [
+                                v_i,
+                                passive_edges[-1]
+
+                            ],
+                            key = lambda n: G[x][n]['weight']
+                        )
+
+                        canditdate_edges[x].exit_list.remove(max_edge)
+
+
+                representative = selected_nodes.union(*loop_nodes)
+                canditdate_edges[representative] = self._CandidateEdges()
+
+                
 
             else:
                 # This corresponds to case 1 from the paper[1]
