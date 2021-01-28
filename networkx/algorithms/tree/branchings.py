@@ -29,15 +29,15 @@ This implementation is based on:
 
 
 import string
+from itertools import chain, islice
 from operator import itemgetter
 from typing import Dict, List, Set
 
 import networkx as nx
-from networkx.utils import py_random_state, FibonacciHeap, CompressedTree
-from itertools import islice, chain
+from networkx.utils import (
+    BinaryHeap, CompressedTree, FibonacciHeap, MinHeap, py_random_state)
 
 from .recognition import is_arborescence, is_branching
-
 
 __all__ = [
     "branching_weight",
@@ -696,6 +696,15 @@ class GGST:
 
         self._edge_mapping = {}
 
+        # Fibonacci heaps are really slow, on my computer I haven't found any size on
+        # which fibonacci heaps are faster in practice. I'll set some threshold at about
+        # 1 billion where we'll switch over heaps. 
+        if len(G) < 1000000000:
+            self.heap = BinaryHeap
+
+        else:
+            self.heap = FibonacciHeap
+
     def _get_edge(self, node_from, node_to) -> "Edge":
         if (node_from, node_to) in self._edge_mapping:
             return self._edge_mapping[(node_from, node_to)]
@@ -772,6 +781,8 @@ class GGST:
         growth_path_list = [G.nodes[0]]
         growth_path_index = 1
 
+        node_heaps: Dict[object, MinHeap] = {}
+
         head = selected_nodes[G.nodes[0]]
 
         # Initialize our exit lists and passive sets
@@ -842,8 +853,6 @@ class GGST:
                 representative = selected_nodes.union(*loop_nodes)
                 canditdate_edges[representative] = self._CandidateEdges()
 
-                
-
             else:
                 # This corresponds to case 1 from the paper[1]
                 growth_path_list.append(new_head)
@@ -851,11 +860,18 @@ class GGST:
                 growth_path[new_head] = growth_path_index
                 selected_nodes.union(new_head)
 
+                node_heaps[new_head] = self.heap()
+
                 for v in canditdate_edges[new_head].exit_list:
                     # new_head corresponds to the u vertex from the paper
                     canditdate_edges[v].passive_set.remove((new_head,v))
                 
                 for x in G.predecessors(new_head):
+
+                    if not canditdate_edges[x].exit_list:
+                        node_heaps[new_head].insert(x, G[x][new_head][attr])
+
+
                     try:
                         canditdate_edges[new_head].passive_set.add(
                             canditdate_edges[x].exit_list[-1]
