@@ -32,6 +32,7 @@ import string
 from itertools import chain, islice
 from operator import itemgetter
 from typing import Dict, List, Set
+import math
 
 import networkx as nx
 from networkx.utils import (
@@ -868,7 +869,12 @@ class GGST:
                 
                 for x in G.predecessors(new_head):
 
-                    if not canditdate_edges[x].exit_list:
+                    if canditdate_edges[x].exit_list:
+                        v_i = canditdate_edges[x].exit_list[-1]
+                        node_heaps[v_i].insert(x, -math.inf)
+                        node_heaps[new_head].insert(node_heaps[v_i].pop(), G[x][new_head][attr])
+
+                    else:
                         node_heaps[new_head].insert(x, G[x][new_head][attr])
 
 
