@@ -429,6 +429,8 @@ class FibonacciHeap(MinHeap):
         self.min_item: self._FHeapItem
         self.min_item = None
 
+        self.in_set = set()
+
         self.count = 0
 
     @_inherit_doc(MinHeap)
@@ -442,6 +444,7 @@ class FibonacciHeap(MinHeap):
     def pop(self):
 
         min_item = self.min_item
+        self.in_set.remove(min_item)
 
         # The fibonacci heap only mantains a reference to its minimum item. This
         # minimum item sits in the root list
@@ -576,6 +579,32 @@ class FibonacciHeap(MinHeap):
         # Create a FHeap item for our key value
         item = self._FHeapItem(key, value)
         min_item = self.min_item
+
+        if item in self.in_set:
+            if item.value < self.min_item:
+                self.min_item = item
+
+            current_item = item
+            while (
+                current_item.parent is not current_item
+                and current_item.parent.value > current_item.value
+            ):
+                # Just pipe the key and value up rather than sorting out all the
+                # pointers
+                (
+                    current_item.value,
+                    current_item.key,
+                    current_item.parent.value,
+                    current_item.parent.value,
+                ) = (
+                    current_item.parent.value,
+                    current_item.parent.value,
+                    current_item.value,
+                    current_item.key,
+                )
+                current_item = current_item.parent
+
+            return
 
         # If the heap is empty, make this the new min_item of the heap
         if min_item is None:
