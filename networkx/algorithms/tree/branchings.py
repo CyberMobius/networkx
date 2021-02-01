@@ -836,7 +836,7 @@ class GGST:
                     selected_nodes.change_value(value_changes[i], loop_nodes[i])
 
                 for v_i in loop_nodes:
-                    passive_edges  = canditdate_edges[v_i].passive_set
+                    passive_edges  = canditdate_edges[v_i].exit_list
                     for j in range(len(passive_edges)-1):
                         x = passive_edges[j]
                         max_edge = max(
@@ -845,14 +845,30 @@ class GGST:
                                 passive_edges[-1]
 
                             ],
-                            key = lambda n: G[x][n]['weight']
+                            key = lambda n: G[x][n][attr]
                         )
+
+
+                        if max_edge == passive_edges[-1]:
+                            node_heaps[v_i].insert(x, -math.inf)
+                            try:
+                                v_j = canditdate_edges[x].exit_list[-2]
+                                node_heaps[v_j].insert(x, G[v_j][x][attr])
+                            except IndexError:
+                                pass
 
                         canditdate_edges[x].exit_list.remove(max_edge)
 
 
+
                 representative = selected_nodes.union(*loop_nodes)
                 canditdate_edges[representative] = self._CandidateEdges()
+                
+                v_iter = iter(loop_nodes)
+                working_heap = node_heaps[next(v_iter)]
+                
+                for v_i in v_iter:
+                    working_heap.union(node_heaps[v_i])
 
             else:
                 # This corresponds to case 1 from the paper[1]

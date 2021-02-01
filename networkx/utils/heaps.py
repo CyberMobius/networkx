@@ -133,6 +133,16 @@ class MinHeap:
         """
         return key in self._dict
 
+    def union(self, other: "MinHeap"):
+        """Add the elements of the other heap into this one
+
+        Parameters
+        ----------
+        other : MinHeap
+            Another heap with items you want to
+        """
+        raise NotImplementedError
+
 
 def _inherit_doc(cls):
     """Decorator for inheriting docstrings from base classes.
@@ -367,6 +377,11 @@ class BinaryHeap(MinHeap):
             dict[key] = value
             heappush(self._heap, (value, next(self._count), key))
             return True
+
+    @_inherit_doc(MinHeap)
+    def union(self, other: MinHeap):
+        while other:
+            self.insert(*other.pop(), allow_increase=True)
 
 
 class FibonacciHeap(MinHeap):
@@ -716,3 +731,7 @@ class FibonacciHeap(MinHeap):
     def delete(self, x: _FHeapItem):
         self.decrease_value(x, -math.inf)
         self.pop()
+
+    @_inherit_doc(MinHeap)
+    def __bool__(self):
+        return self.min_item is not None
