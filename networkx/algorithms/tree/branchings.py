@@ -891,9 +891,9 @@ class GGST:
                     if canditdate_edges[x].exit_list:
                         v_i = canditdate_edges[x].exit_list[-1]
                         node_heaps[v_i].insert(x, -math.inf)
-                        node_heaps[new_head].insert(
-                            node_heaps[v_i].pop(), G[x][new_head][attr]
-                        )
+
+                        key, _ = node_heaps[v_i].pop()
+                        node_heaps[new_head].insert(key, G[x][new_head][attr])
 
                     else:
                         node_heaps[new_head].insert(x, G[x][new_head][attr])
