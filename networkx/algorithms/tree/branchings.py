@@ -33,6 +33,7 @@ from itertools import chain, islice
 from operator import itemgetter
 from typing import Dict, List, Set
 import math
+from weakref import WeakSet
 
 import networkx as nx
 from networkx.utils import (
@@ -673,7 +674,7 @@ class GGST:
         vertices v_0,v_1,...,v_l.) For each vertex v_j on the growth path we maintain a
         similar exit list, of those edges (v_j, v_i) with j < i also sorted in
         increasing order on i. Among those edges in the exit list, the first (of lowest
-        index i) is active; the others are passive. For each vertex v_i, we maintain a 
+        index i) is active; the others are passive. For each vertex v_i, we maintain a
         passive set containing all passive edges entering v_i"
         """
         exit_list: List
@@ -778,47 +779,33 @@ class GGST:
         selected_nodes = CompressedTree()
 
         # Initialize our growth path
-        growth_path = {G.nodes[0]: 0}
-        growth_path_list = [G.nodes[0]]
-        growth_path_index = 1
+        growth_path = {}
+        growth_path_list = []
+        growth_path_index = 0
+
+        # Use this to know when every node belongs to the graph belongs to the working
+        # arborescence and I can move onto unpacking nodes
+        handled_nodes = WeakSet()
 
         node_heaps: Dict[object, MinHeap] = {}
 
-        head = selected_nodes[G.nodes[0]]
+        u = selected_nodes[G.nodes[0]]
 
         # Initialize our exit lists and passive sets
         canditdate_edges: Dict[object, self._CandidateEdges]
         canditdate_edges = {node: self._CandidateEdges() for node in G.nodes}
         # For all edges of the form (v, head) add the edge to the exist list of
-        for v in G.predecessors(head):
-            canditdate_edges[v].exit_list.append(head)
+        for v in G.predecessors(u):
+            canditdate_edges[v].exit_list.append(u)
 
-        new_head = head
-        while True:
-            # try:
-            #     new_head = min(
-            #         p
-            #         for p in G.predecessors(head)
-            #         if p is not head,
-            #         key=lambda x: G[x][head][attr]
-            #     )
+        while len(handled_nodes) < len(G):
 
-            # except (StopIteration, ValueError):
-            #     # Like I described above, if we can't find any predecessors,
-            #     # we'll create an edge with infinite weight to some node.
-            #     # To hopefully improve on performance, we'll pick one that
-            #     # doesn't immediately create a loop. For the time being this is
-            #     # an implicit edge.
-            #     new_head = next(x for x in G.nodes if x not in growth_path)
-
-            # new_head = selected_nodes[new_head]
-
-            if new_head in growth_path:
+            if u in growth_path:
                 # Compress loop into one node. This is case 2 from the paper [1]
 
                 # TODO see if there's a way to avoid creating this intermediate list
                 # to free up some space for potentially large loops
-                loop_start = growth_path[new_head]
+                loop_start = growth_path[u]
                 loop_nodes = growth_path_list[loop_start:]
 
                 # Delete these items from the growth_path
@@ -875,39 +862,40 @@ class GGST:
 
             else:
                 # This corresponds to case 1 from the paper[1]
-                growth_path_list.append(new_head)
+                growth_path_list.append(u)
                 growth_path_index += 1
-                growth_path[new_head] = growth_path_index
-                selected_nodes.union(new_head)
+                growth_path[u] = growth_path_index
+                selected_nodes.union(u)
 
-                node_heaps[new_head] = self.heap()
+                node_heaps[u] = self.heap()
 
-                for v in canditdate_edges[new_head].exit_list:
+                for v in canditdate_edges[u].exit_list:
                     # new_head corresponds to the u vertex from the paper
-                    canditdate_edges[v].passive_set.remove((new_head, v))
+                    canditdate_edges[v].passive_set.remove((u, v))
 
-                for x in G.predecessors(new_head):
+                for x in G.predecessors(u):
 
                     if canditdate_edges[x].exit_list:
                         v_i = canditdate_edges[x].exit_list[-1]
                         node_heaps[v_i].insert(x, -math.inf)
 
                         key, _ = node_heaps[v_i].pop()
-                        node_heaps[new_head].insert(key, G[x][new_head][attr])
+                        node_heaps[u].insert(key, G[x][u][attr])
 
                     else:
-                        node_heaps[new_head].insert(x, G[x][new_head][attr])
+                        node_heaps[u].insert(x, G[x][u][attr])
 
                     try:
-                        canditdate_edges[new_head].passive_set.add(
+                        canditdate_edges[u].passive_set.add(
                             canditdate_edges[x].exit_list[-1]
                         )
                     except IndexError:
                         pass
 
-                    canditdate_edges[x].exit_list.append(new_head)
+                    canditdate_edges[x].exit_list.append(u)
 
-            new_head, _ = node_heaps[growth_path_list[growth_path_index]].pop()
+            handled_nodes.add(u)
+            u, _ = node_heaps[growth_path_list[growth_path_index]].pop()
 
 
 def maximum_branching(G, attr="weight", default=1, preserve_attrs=False):
